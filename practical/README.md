@@ -202,24 +202,6 @@ df.plot %>%
 
 ![](comparative_metagenome_analysis_files/figure-html/fuso_2-1.png)<!-- -->
 
-# Exercises: Visualization 
-
-* Explore the significantly associated species using boxplots or other 
-visualization techniques. Which is the most strongly associated species that
-is enriched in controls?
-
-* Plot a volcano plot of the associations between cancer and controls. Which
-effect size could you use for the volcano plot?
-
-* Create a ordination plot for our data and colour the samples by group. 
-How would you interpret the results? Try out different ecological distances. 
-How does the choice of distance affect the group separation?
-(**Tip**: make sure to check out the `vegdist` function in the **vegan** 
-package and also the `pco` function in the **labdsv** package)
-
-* **Optional** Plot a heatmap of the 20 top associated bacterial species. Add 
-the disease status of the different samples as annotation to the heatmap. 
-
 # SIAMCAT Association Testing
 
 We can also use the `SIAMCAT` R package to test for differential abundance and
@@ -243,13 +225,13 @@ sc.obj <- siamcat(feat=rel.tax.profiles, meta=df.meta,
 ##    CRC
 ## Label used as control:
 ##    CTR
-## + finished create.label.from.metadata in 0.027 s
+## + finished create.label.from.metadata in 0.026 s
 ## + starting validate.data
 ## +++ checking overlap between labels and features
 ## + Keeping labels of 114 sample(s).
 ## +++ checking sample number per class
 ## +++ checking overlap between samples and metadata
-## + finished validate.data in 0.381 s
+## + finished validate.data in 0.444 s
 ```
 
 We can use `SIAMCAT` for feature filtering as well:
@@ -280,21 +262,19 @@ sc.obj <- check.associations(sc.obj, detect.lim = 1e-05,
 ```
 ![](comparative_metagenome_analysis_files/figure-html/sc_assoc_testing_real-1.png)<!-- -->
 
-The associations metrics computed by `SIAMCAT` are stored in the `SIAMCAT` 
-object and can be extracted, if you want to have a closer look at the results
-for yourself. For example, one could create a volcano plot like that:
+# Exercises: Visualization 
 
 
-```r
-df.assoc <- associations(sc.obj)
-df.assoc %>% 
-  ggplot(aes(x=fc, y=-log10(p.adj))) + 
-    geom_point() + 
-    xlab('Fold change')
-```
+* The associations metrics computed by `SIAMCAT` are stored in the `SIAMCAT` 
+object and can be extracted by using `associations(sc.obj)`, if you want to 
+have a closer look at the results for yourself. Plot a volcano plot of the 
+associations between cancer and controls using the output from `SIAMCAT`.
 
-![](comparative_metagenome_analysis_files/figure-html/volc_2-1.png)<!-- -->
-
+* **Optional** Create a ordination plot for our data and colour the samples 
+by group. How would you interpret the results? Try out different ecological 
+distances. How does the choice of distance affect the group separation?
+(**Tip**: make sure to check out the `vegdist` function in the **vegan** 
+package and also the `pco` function in the **labdsv** package)
 
 # Machine learning with SIAMCAT
 
@@ -302,8 +282,8 @@ df.assoc %>%
 
 The `SIAMCAT` machine learning workflow consists of several steps:
 
-<!--html_preserve--><div id="htmlwidget-c73927fe76742a4dd652" style="width:672px;height:480px;" class="grViz html-widget"></div>
-<script type="application/json" data-for="htmlwidget-c73927fe76742a4dd652">{"x":{"diagram":"\ndigraph siamcat_workflow {\n\n  # a \"graph\" statement\n  graph [overlap = true, fontsize = 10]\n\n  # several \"node\" statements\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"filter.features\"]\n  C\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"normalize.features\"]\n  F\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"create.data.split\"]\n  G\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"train.model\"]\n  H\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"make.predictions\"]\n  I\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"evaluate.prediction\"]\n  J\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"model.evaluation.plot\"]\n  K\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"model.interpretation.plot\"]\n  L\n\n  # several \"edge\" statements\n  C->F\n  F->G G->H H->I I->J J->K\n  J->L\n  }\n","config":{"engine":"dot","options":null}},"evals":[],"jsHooks":[]}</script><!--/html_preserve-->
+<!--html_preserve--><div id="htmlwidget-33e389e6993a9f62baa2" style="width:672px;height:480px;" class="grViz html-widget"></div>
+<script type="application/json" data-for="htmlwidget-33e389e6993a9f62baa2">{"x":{"diagram":"\ndigraph siamcat_workflow {\n\n  # a \"graph\" statement\n  graph [overlap = true, fontsize = 10]\n\n  # several \"node\" statements\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"filter.features\"]\n  C\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"normalize.features\"]\n  F\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"create.data.split\"]\n  G\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"train.model\"]\n  H\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"make.predictions\"]\n  I\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"evaluate.prediction\"]\n  J\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"model.evaluation.plot\"]\n  K\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"model.interpretation.plot\"]\n  L\n\n  # several \"edge\" statements\n  C->F\n  F->G G->H H->I I->J J->K\n  J->L\n  }\n","config":{"engine":"dot","options":null}},"evals":[],"jsHooks":[]}</script><!--/html_preserve-->
 
 Since we already created a `SIAMCAT` object and filtered the raw data, we can
 start directly with the next step.
@@ -449,6 +429,15 @@ it makes sense to perform feature selection on your dataset. You can
 supply the parameters for the feature selection to the `train.model` function
 in `SIAMCAT`.
 
+# Further information
+
+You can find more information about `SIAMCAT` on https://siamcat.embl.de 
+or on Bioconductor under 
+https://www.bioconductor.org/packages/release/bioc/html/SIAMCAT.html
+
+There you can also find several vignettes which go into more detail about 
+different applications for `SIAMCAT`.
+
 # SessionInfo
 
 
@@ -469,7 +458,7 @@ sessionInfo()
 ## [1] stats     graphics  grDevices utils     datasets  methods   base     
 ## 
 ## other attached packages:
-##  [1] DiagrammeR_1.0.6.1 SIAMCAT_1.9.0      phyloseq_1.32.0    mlr_2.18.0        
+##  [1] DiagrammeR_1.0.6.1 SIAMCAT_1.11.0     phyloseq_1.32.0    mlr_2.18.0        
 ##  [5] ParamHelpers_1.14  forcats_0.5.0      stringr_1.4.0      dplyr_1.0.2       
 ##  [9] purrr_0.3.4        readr_1.4.0        tidyr_1.1.2        tibble_3.0.4      
 ## [13] ggplot2_3.3.2      tidyverse_1.3.0   

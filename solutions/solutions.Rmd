@@ -169,73 +169,65 @@ df.plot %>%
     ylab('log10(F. nucleatum rel. ab.)')
 ```
 
+# SIAMCAT Association Testing
+
+We can also use the `SIAMCAT` R package to test for differential abundance and
+produce standard visualizations.
+
+```{r siamcat, message=FALSE}
+library("SIAMCAT")
+```
+
+Within `SIAMCAT`, the data are stored in the `SIAMCAT` object which contains 
+the feature matrix, the metadata, and information about the groups you want to
+compare.
+
+```{r sc.obj}
+sc.obj <- siamcat(feat=rel.tax.profiles, meta=df.meta, 
+                  label='Group', case='CRC')
+```
+
+We can use `SIAMCAT` for feature filtering as well:
+
+```{r sc_filtering}
+sc.obj <- filter.features(sc.obj, filter.method = 'abundance', cutoff = 1e-03)
+sc.obj <- filter.features(sc.obj, filter.method = 'prevalence', 
+                          cutoff = 0.05, feature.type = 'filtered')
+sc.obj
+```
+
+Now, we can test the filtered feature for differential abundance with `SIAMCAT`:
+
+```{r sc_assoc_testing, eval=FALSE}
+sc.obj <- check.associations(sc.obj, detect.lim = 1e-05, 
+                             fn.plot = './associations.pdf')
+```
+```{r sc_assoc_testing_real, message=FALSE, echo=FALSE}
+sc.obj <- check.associations(sc.obj, detect.lim = 1e-05, 
+                             panels = c('fc'),
+                             prompt = FALSE)
+```
+
+
 # Exercises: Visualization 
 
 ## Solution I
 
-**Explore the significantly associated species using boxplots or other 
-visualization techniques. Which is the most strongly associated species that
-is enriched in controls?**
+*** The associations metrics computed by `SIAMCAT` are stored in the `SIAMCAT` 
+object and can be extracted by using `associations(sc.obj)`, if you want to 
+have a closer look at the results for yourself. Plot a volcano plot of the 
+associations between cancer and controls using the output from `SIAMCAT`.**
 
-There are several ways to complete this exercise and you are encouraged to be 
-creative about how you solve it.
+```{r volc_2}
+df.assoc <- associations(sc.obj)
+df.assoc %>% 
+  ggplot(aes(x=fc, y=-log10(p.adj))) + 
+    geom_point() + 
+    xlab('Fold change')
 
-One way could be to plot several boxplots at the same time:
-
-```{r solution_1}
-spp <- names(head(sort(p.vals))) # look at the top 6 species
-
-t(rel.tax.profiles.filt[spp,]) %>% 
-  as_tibble(rownames = 'Sample_ID') %>% 
-  left_join(df.meta %>% select(Sample_ID, Group)) %>% # join with metadata
-  pivot_longer(cols = -c(Sample_ID, Group)) %>% 
-  mutate(value=log10(value + 1e-05)) %>% # transform into log values
-  mutate(name=factor(name, levels=spp)) %>% # change to factor for ordering
-  ggplot(aes(x=name, y=value, fill=Group)) + 
-    geom_boxplot() +
-    xlab('') + 
-    ylab('log10(rel.ab.)') + 
-    theme(axis.text.x = element_text(angle=45, hjust=1))
 ```
-
-It seems that the _Clostridium sp._ and _Eubacterium elgiens_ species are the 
-top significant species enriched in controls.
 
 ## Solution II
-
-**Plot a volcano plot of the associations between cancer and controls. Which
-effect size could you use for the volcano plot?**
-
-We can first try to compute the fold change as a measure for effect size and 
-check how this would look like in a volcano plot. To do so, we loop again 
-through all species:
-
-```{r solution_2}
-fc <- rep_len(NA, nrow(rel.tax.profiles.filt))
-names(fc) <- rownames(rel.tax.profiles.filt)
-stopifnot(all(rownames(df.meta) == colnames(rel.tax.profiles.filt)))
-for (i in rownames(rel.tax.profiles.filt)){
-  x <- rel.tax.profiles.filt[i,]
-  y <- df.meta$Group
-  x.ctr <- median(log10(x[y=='CTR'] + 1e-05))
-  x.crc <- median(log10(x[y=='CRC'] + 1e-05))
-  fc[i] <- x.crc-x.ctr
-}
-tail(sort(fc))
-```
-
-Now, we can plot the volcano plot:
-```{r solution_2_2}
-plot(fc, -log10(p.vals), 
-     xlab='median fold change')
-```
-
-As you can see, there are a lot bacterial species that show a significant 
-difference which is not captured by the standard median fold change. Therefore,
-the generalized fold change (see the section below) will be more appriopriate
-for microbiome data.
-
-## Solution III
 
 **Create a ordination plot for our data and colour the samples by group. 
 How would you interpret the results? Try out different ecological distances. 
@@ -285,58 +277,6 @@ df.plot %>%
 
 ```
 
-
-# SIAMCAT Association Testing
-
-We can also use the `SIAMCAT` R package to test for differential abundance and
-produce standard visualizations.
-
-```{r siamcat, message=FALSE}
-library("SIAMCAT")
-```
-
-Within `SIAMCAT`, the data are stored in the `SIAMCAT` object which contains 
-the feature matrix, the metadata, and information about the groups you want to
-compare.
-
-```{r sc.obj}
-sc.obj <- siamcat(feat=rel.tax.profiles, meta=df.meta, 
-                  label='Group', case='CRC')
-```
-
-We can use `SIAMCAT` for feature filtering as well:
-
-```{r sc_filtering}
-sc.obj <- filter.features(sc.obj, filter.method = 'abundance', cutoff = 1e-03)
-sc.obj <- filter.features(sc.obj, filter.method = 'prevalence', 
-                          cutoff = 0.05, feature.type = 'filtered')
-sc.obj
-```
-
-Now, we can test the filtered feature for differential abundance with `SIAMCAT`:
-
-```{r sc_assoc_testing, eval=FALSE}
-sc.obj <- check.associations(sc.obj, detect.lim = 1e-05, 
-                             fn.plot = './associations.pdf')
-```
-```{r sc_assoc_testing_real, message=FALSE, echo=FALSE}
-sc.obj <- check.associations(sc.obj, detect.lim = 1e-05, 
-                             panels = c('fc'),
-                             prompt = FALSE)
-```
-
-The associations metrics computed by `SIAMCAT` are stored in the `SIAMCAT` 
-object and can be extracted, if you want to have a closer look at the results
-for yourself. For example, one could create a volcano plot like that:
-
-```{r volc_2}
-df.assoc <- associations(sc.obj)
-df.assoc %>% 
-  ggplot(aes(x=fc, y=-log10(p.adj))) + 
-    geom_point() + 
-    xlab('Fold change')
-
-```
 
 
 # Machine learning with SIAMCAT
@@ -684,6 +624,15 @@ model.evaluation.plot(mOTUs=sc.obj, KEGG=sc.obj.kegg,
 ```
 
 ![](./eval_plot_func.png)
+
+# Further information
+
+You can find more information about `SIAMCAT` on https://siamcat.embl.de 
+or on Bioconductor under 
+https://www.bioconductor.org/packages/release/bioc/html/SIAMCAT.html
+
+There you can also find several vignettes which go into more detail about 
+different applications for `SIAMCAT`.
 
 # SessionInfo
 

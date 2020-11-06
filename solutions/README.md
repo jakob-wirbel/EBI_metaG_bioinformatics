@@ -205,93 +205,88 @@ df.plot %>%
 
 ![](solutions_files/figure-html/fuso_2-1.png)<!-- -->
 
+# SIAMCAT Association Testing
+
+We can also use the `SIAMCAT` R package to test for differential abundance and
+produce standard visualizations.
+
+
+```r
+library("SIAMCAT")
+```
+
+Within `SIAMCAT`, the data are stored in the `SIAMCAT` object which contains 
+the feature matrix, the metadata, and information about the groups you want to
+compare.
+
+
+```r
+sc.obj <- siamcat(feat=rel.tax.profiles, meta=df.meta, 
+                  label='Group', case='CRC')
+## + starting create.label
+## Label used as case:
+##    CRC
+## Label used as control:
+##    CTR
+## + finished create.label.from.metadata in 0.186 s
+## + starting validate.data
+## +++ checking overlap between labels and features
+## + Keeping labels of 114 sample(s).
+## +++ checking sample number per class
+## +++ checking overlap between samples and metadata
+## + finished validate.data in 0.767 s
+```
+
+We can use `SIAMCAT` for feature filtering as well:
+
+
+```r
+sc.obj <- filter.features(sc.obj, filter.method = 'abundance', cutoff = 1e-03)
+## Features successfully filtered
+sc.obj <- filter.features(sc.obj, filter.method = 'prevalence', 
+                          cutoff = 0.05, feature.type = 'filtered')
+## Features successfully filtered
+sc.obj
+## siamcat-class object
+## label()                Label object:         61 CTR and 53 CRC samples
+## filt_feat()            Filtered features:    839 features after abundance, prevalence filtering
+## 
+## contains phyloseq-class experiment-level object @phyloseq:
+## phyloseq@otu_table()   OTU Table:            [ 14213 taxa and 114 samples ]
+## phyloseq@sam_data()    Sample Data:          [ 114 samples by 13 sample variables ]
+```
+
+Now, we can test the filtered feature for differential abundance with `SIAMCAT`:
+
+
+```r
+sc.obj <- check.associations(sc.obj, detect.lim = 1e-05, 
+                             fn.plot = './associations.pdf')
+```
+![](solutions_files/figure-html/sc_assoc_testing_real-1.png)<!-- -->
+
+
 # Exercises: Visualization 
 
 ## Solution I
 
-**Explore the significantly associated species using boxplots or other 
-visualization techniques. Which is the most strongly associated species that
-is enriched in controls?**
-
-There are several ways to complete this exercise and you are encouraged to be 
-creative about how you solve it.
-
-One way could be to plot several boxplots at the same time:
+*** The associations metrics computed by `SIAMCAT` are stored in the `SIAMCAT` 
+object and can be extracted by using `associations(sc.obj)`, if you want to 
+have a closer look at the results for yourself. Plot a volcano plot of the 
+associations between cancer and controls using the output from `SIAMCAT`.**
 
 
 ```r
-spp <- names(head(sort(p.vals))) # look at the top 6 species
-
-t(rel.tax.profiles.filt[spp,]) %>% 
-  as_tibble(rownames = 'Sample_ID') %>% 
-  left_join(df.meta %>% select(Sample_ID, Group)) %>% # join with metadata
-  pivot_longer(cols = -c(Sample_ID, Group)) %>% 
-  mutate(value=log10(value + 1e-05)) %>% # transform into log values
-  mutate(name=factor(name, levels=spp)) %>% # change to factor for ordering
-  ggplot(aes(x=name, y=value, fill=Group)) + 
-    geom_boxplot() +
-    xlab('') + 
-    ylab('log10(rel.ab.)') + 
-    theme(axis.text.x = element_text(angle=45, hjust=1))
-## Joining, by = "Sample_ID"
+df.assoc <- associations(sc.obj)
+df.assoc %>% 
+  ggplot(aes(x=fc, y=-log10(p.adj))) + 
+    geom_point() + 
+    xlab('Fold change')
 ```
 
-![](solutions_files/figure-html/solution_1-1.png)<!-- -->
-
-It seems that the _Clostridium sp._ and _Eubacterium elgiens_ species are the 
-top significant species enriched in controls.
+![](solutions_files/figure-html/volc_2-1.png)<!-- -->
 
 ## Solution II
-
-**Plot a volcano plot of the associations between cancer and controls. Which
-effect size could you use for the volcano plot?**
-
-We can first try to compute the fold change as a measure for effect size and 
-check how this would look like in a volcano plot. To do so, we loop again 
-through all species:
-
-
-```r
-fc <- rep_len(NA, nrow(rel.tax.profiles.filt))
-names(fc) <- rownames(rel.tax.profiles.filt)
-stopifnot(all(rownames(df.meta) == colnames(rel.tax.profiles.filt)))
-for (i in rownames(rel.tax.profiles.filt)){
-  x <- rel.tax.profiles.filt[i,]
-  y <- df.meta$Group
-  x.ctr <- median(log10(x[y=='CTR'] + 1e-05))
-  x.crc <- median(log10(x[y=='CRC'] + 1e-05))
-  fc[i] <- x.crc-x.ctr
-}
-tail(sort(fc))
-##                        Firmicutes sp. [ref_mOTU_v25_03641] 
-##                                                  0.9855962 
-## Clostridiales species incertae sedis [meta_mOTU_v25_12691] 
-##                                                  1.0254255 
-##                  Hungatella hathewayi [ref_mOTU_v25_03436] 
-##                                                  1.0323472 
-##                      Alistipes ihumii [ref_mOTU_v25_07379] 
-##                                                  1.0622128 
-##                Clostridium sp. CAG:58 [ref_mOTU_v25_07640] 
-##                                                  1.1421287 
-##       Fusicatenibacter saccharivorans [ref_mOTU_v25_02680] 
-##                                                  1.3394655
-```
-
-Now, we can plot the volcano plot:
-
-```r
-plot(fc, -log10(p.vals), 
-     xlab='median fold change')
-```
-
-![](solutions_files/figure-html/solution_2_2-1.png)<!-- -->
-
-As you can see, there are a lot bacterial species that show a significant 
-difference which is not captured by the standard median fold change. Therefore,
-the generalized fold change (see the section below) will be more appriopriate
-for microbiome data.
-
-## Solution III
 
 **Create a ordination plot for our data and colour the samples by group. 
 How would you interpret the results? Try out different ecological distances. 
@@ -348,81 +343,6 @@ df.plot %>%
 ![](solutions_files/figure-html/solution_3_4-1.png)<!-- -->
 
 
-# SIAMCAT Association Testing
-
-We can also use the `SIAMCAT` R package to test for differential abundance and
-produce standard visualizations.
-
-
-```r
-library("SIAMCAT")
-```
-
-Within `SIAMCAT`, the data are stored in the `SIAMCAT` object which contains 
-the feature matrix, the metadata, and information about the groups you want to
-compare.
-
-
-```r
-sc.obj <- siamcat(feat=rel.tax.profiles, meta=df.meta, 
-                  label='Group', case='CRC')
-## + starting create.label
-## Label used as case:
-##    CRC
-## Label used as control:
-##    CTR
-## + finished create.label.from.metadata in 0.056 s
-## + starting validate.data
-## +++ checking overlap between labels and features
-## + Keeping labels of 114 sample(s).
-## +++ checking sample number per class
-## +++ checking overlap between samples and metadata
-## + finished validate.data in 0.118 s
-```
-
-We can use `SIAMCAT` for feature filtering as well:
-
-
-```r
-sc.obj <- filter.features(sc.obj, filter.method = 'abundance', cutoff = 1e-03)
-## Features successfully filtered
-sc.obj <- filter.features(sc.obj, filter.method = 'prevalence', 
-                          cutoff = 0.05, feature.type = 'filtered')
-## Features successfully filtered
-sc.obj
-## siamcat-class object
-## label()                Label object:         61 CTR and 53 CRC samples
-## filt_feat()            Filtered features:    839 features after abundance, prevalence filtering
-## 
-## contains phyloseq-class experiment-level object @phyloseq:
-## phyloseq@otu_table()   OTU Table:            [ 14213 taxa and 114 samples ]
-## phyloseq@sam_data()    Sample Data:          [ 114 samples by 13 sample variables ]
-```
-
-Now, we can test the filtered feature for differential abundance with `SIAMCAT`:
-
-
-```r
-sc.obj <- check.associations(sc.obj, detect.lim = 1e-05, 
-                             fn.plot = './associations.pdf')
-```
-![](solutions_files/figure-html/sc_assoc_testing_real-1.png)<!-- -->
-
-The associations metrics computed by `SIAMCAT` are stored in the `SIAMCAT` 
-object and can be extracted, if you want to have a closer look at the results
-for yourself. For example, one could create a volcano plot like that:
-
-
-```r
-df.assoc <- associations(sc.obj)
-df.assoc %>% 
-  ggplot(aes(x=fc, y=-log10(p.adj))) + 
-    geom_point() + 
-    xlab('Fold change')
-```
-
-![](solutions_files/figure-html/volc_2-1.png)<!-- -->
-
 
 # Machine learning with SIAMCAT
 
@@ -430,8 +350,8 @@ df.assoc %>%
 
 The `SIAMCAT` machine learning workflow consists of several steps:
 
-<!--html_preserve--><div id="htmlwidget-80f5c3dba57dbc304e24" style="width:672px;height:480px;" class="grViz html-widget"></div>
-<script type="application/json" data-for="htmlwidget-80f5c3dba57dbc304e24">{"x":{"diagram":"\ndigraph siamcat_workflow {\n\n  # a \"graph\" statement\n  graph [overlap = true, fontsize = 10]\n\n  # several \"node\" statements\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"filter.features\"]\n  C\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"normalize.features\"]\n  F\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"create.data.split\"]\n  G\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"train.model\"]\n  H\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"make.predictions\"]\n  I\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"evaluate.prediction\"]\n  J\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"model.evaluation.plot\"]\n  K\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"model.interpretation.plot\"]\n  L\n\n  # several \"edge\" statements\n  C->F\n  F->G G->H H->I I->J J->K\n  J->L\n  }\n","config":{"engine":"dot","options":null}},"evals":[],"jsHooks":[]}</script><!--/html_preserve-->
+<!--html_preserve--><div id="htmlwidget-1122882b7307894ec1cc" style="width:672px;height:480px;" class="grViz html-widget"></div>
+<script type="application/json" data-for="htmlwidget-1122882b7307894ec1cc">{"x":{"diagram":"\ndigraph siamcat_workflow {\n\n  # a \"graph\" statement\n  graph [overlap = true, fontsize = 10]\n\n  # several \"node\" statements\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"filter.features\"]\n  C\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"normalize.features\"]\n  F\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"create.data.split\"]\n  G\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"train.model\"]\n  H\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"make.predictions\"]\n  I\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"evaluate.prediction\"]\n  J\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"model.evaluation.plot\"]\n  K\n\n  node [shape = box,\n  fontname = Helvetica,\n  label=\"model.interpretation.plot\"]\n  L\n\n  # several \"edge\" statements\n  C->F\n  F->G G->H H->I I->J J->K\n  J->L\n  }\n","config":{"engine":"dot","options":null}},"evals":[],"jsHooks":[]}</script><!--/html_preserve-->
 
 Since we already created a `SIAMCAT` object and filtered the raw data, we can
 start directly with the next step.
@@ -587,7 +507,7 @@ sc.obj.at.ext <- siamcat(feat=rel.tax.at, meta=df.meta.at,
 ## + Keeping labels of 109 sample(s).
 ## +++ checking sample number per class
 ## +++ checking overlap between samples and metadata
-## + finished validate.data in 0.072 s
+## + finished validate.data in 0.43 s
 ```
 
 We can use the `make.predictions` function from `SIAMCAT` to apply the trained
@@ -628,13 +548,13 @@ sc.obj.at <- siamcat(feat=rel.tax.at, meta=df.meta.at,
 ##    CRC
 ## Label used as control:
 ##    CTR
-## + finished create.label.from.metadata in 0.001 s
+## + finished create.label.from.metadata in 0.002 s
 ## + starting validate.data
 ## +++ checking overlap between labels and features
 ## + Keeping labels of 109 sample(s).
 ## +++ checking sample number per class
 ## +++ checking overlap between samples and metadata
-## + finished validate.data in 0.462 s
+## + finished validate.data in 0.098 s
 sc.obj.at <- filter.features(sc.obj.at, 
                              filter.method = 'abundance', cutoff = 1e-03)
 ## Features successfully filtered
@@ -666,13 +586,13 @@ sc.obj.fr <- siamcat(feat=rel.tax.profiles, meta=df.meta,
 ##    CRC
 ## Label used as control:
 ##    CTR
-## + finished create.label.from.metadata in 0.001 s
+## + finished create.label.from.metadata in 0.002 s
 ## + starting validate.data
 ## +++ checking overlap between labels and features
 ## + Keeping labels of 114 sample(s).
 ## +++ checking sample number per class
 ## +++ checking overlap between samples and metadata
-## + finished validate.data in 0.07 s
+## + finished validate.data in 0.077 s
 sc.obj.fr <- make.predictions(sc.obj.at, siamcat.holdout = sc.obj.fr)
 ## Features normalized successfully.
 ## Made predictions successfully.
@@ -789,13 +709,13 @@ sc.obj.kegg <- siamcat(feat = rel.func.profiles, meta=df.meta,
 ##    CRC
 ## Label used as control:
 ##    CTR
-## + finished create.label.from.metadata in    0 s
+## + finished create.label.from.metadata in 0.001 s
 ## + starting validate.data
 ## +++ checking overlap between labels and features
 ## + Keeping labels of 114 sample(s).
 ## +++ checking sample number per class
 ## +++ checking overlap between samples and metadata
-## + finished validate.data in 0.05 s
+## + finished validate.data in 0.52 s
 # filter data
 sc.obj.kegg <- filter.features(sc.obj.kegg, filter.method = 'abundance',
                                cutoff=1e-05)
@@ -845,6 +765,15 @@ model.evaluation.plot(mOTUs=sc.obj, KEGG=sc.obj.kegg,
 
 ![](./eval_plot_func.png)
 
+# Further information
+
+You can find more information about `SIAMCAT` on https://siamcat.embl.de 
+or on Bioconductor under 
+https://www.bioconductor.org/packages/release/bioc/html/SIAMCAT.html
+
+There you can also find several vignettes which go into more detail about 
+different applications for `SIAMCAT`.
+
 # SessionInfo
 
 
@@ -866,7 +795,7 @@ sessionInfo()
 ## 
 ## other attached packages:
 ##  [1] DiagrammeR_1.0.6.1 labdsv_2.0-1       mgcv_1.8-33        nlme_3.1-150      
-##  [5] vegan_2.5-6        lattice_0.20-41    permute_0.9-5      SIAMCAT_1.9.0     
+##  [5] vegan_2.5-6        lattice_0.20-41    permute_0.9-5      SIAMCAT_1.11.0    
 ##  [9] phyloseq_1.32.0    mlr_2.18.0         ParamHelpers_1.14  forcats_0.5.0     
 ## [13] stringr_1.4.0      dplyr_1.0.2        purrr_0.3.4        readr_1.4.0       
 ## [17] tidyr_1.1.2        tibble_3.0.4       ggplot2_3.3.2      tidyverse_1.3.0   
